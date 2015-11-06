@@ -13,6 +13,7 @@ class CalculatorBrain {
         // enum can have functions
         // enum can have properties, but only computed properties
         case Operand(Double)
+        case ConstantOperation(String, Void -> Double)
         case UnaryOperation(String, Double -> Double)
         case BinaryOperation(String, (Double, Double) -> Double)
         
@@ -25,6 +26,8 @@ class CalculatorBrain {
                 switch self {
                 case .Operand(let operand):
                     return "\(operand)"
+                case .ConstantOperation(let symbol, _):
+                    return "\(symbol)"
                 case .UnaryOperation(let symbol, _):
                     return symbol
                 case .BinaryOperation(let symbol, _):
@@ -43,16 +46,47 @@ class CalculatorBrain {
             knownOps[op.description] = op
         }
         
+        learnOp(Op.ConstantOperation("π") {M_PI})
         learnOp(Op.BinaryOperation("×", *)) // {$0 * $1}
         learnOp(Op.BinaryOperation("÷") {$1 / $0})
         learnOp(Op.BinaryOperation("+", +)) // {$0 + $1}
         learnOp(Op.BinaryOperation("−") {$1 - $0})
         learnOp(Op.UnaryOperation("√", sqrt)) // { sqrt($0) })
+        learnOp(Op.UnaryOperation("sin", sin))
+        learnOp(Op.UnaryOperation("cos", cos))
+        
         //knownOps["√"] = Op.UnaryOperation("√", sqrt) // { sqrt($0) }
     }
     
+    typealias PropertyList = AnyObject
+    
+    var program: PropertyList { // guarenteed to be a PropertyList
+        get {
+            return opStack.map { $0.description }
+            /*
+            var returnValue = [String()]
+            for op in opStack {
+                returnValue.append(op.description)
+            }
+            return returnValue
+            */
+        }
+        set {
+            if let opSymbol = newValue as? Array<String> {
+                var newOpStack = [Op]()
+                for opSymbol in opSymbol {
+                    if let op = knownOps[opSymbol] {
+                        newOpStack.append(op)
+                    } else if let operand = NSNumberFormatter().numberFromString(opSymbol)?.doubleValue {
+                        newOpStack.append(.Operand(operand))
+                    }
+                }
+                opStack = newOpStack
+            }
+        }
+    }
+    
     private func evaluate(ops: [Op]) -> (result: Double?, remainingOps: [Op]) {
-        
         // Recursion is a method that calls itself.
         
         if !ops.isEmpty {
@@ -61,6 +95,8 @@ class CalculatorBrain {
             switch op {
             case .Operand(let operand):
                 return(operand, remainingOps)
+            case .ConstantOperation(_, let operation):
+                return(operation(), remainingOps)
             case .UnaryOperation(_, let operation):
                 // Recursion and Tuple
                 let operandEvaluation = evaluate(remainingOps)
